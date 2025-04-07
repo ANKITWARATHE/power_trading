@@ -1,0 +1,10 @@
+pandas
+matplotlib
+openpyxl
+statsmodels
+scikit-learn
+xgboost
+tensorflow
+keras-tuner
+plotly
+streamlit
