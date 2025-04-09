@@ -10,4 +10,4 @@ plotly
 streamlit
 seaborn
 sqlalchemy
-
+pymysql
