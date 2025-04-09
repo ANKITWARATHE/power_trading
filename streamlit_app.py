@@ -13,10 +13,10 @@ import pymysql  # Ensure this is installed: pip install pymysql
 
 # Define model paths using os.path.join for compatibility
 
-with open("D:/DigiTGM360_NEW/Project/Real_time demand-supply balancing for power trading/Final_model/xgboost_final_model_new.pkl", 'rb') as f:
+with open("xgboost_final_model_new.pkl", 'rb') as f:
     xgboost_model = pickle.load(f)
 
-with open("D:/DigiTGM360_NEW/Project/Real_time demand-supply balancing for power trading/Final_model/rf_final_model_new.pkl", 'rb') as f:
+with open("rf_final_model_new.pkl", 'rb') as f:
     rf_model = pickle.load(f)
 
 scaler = joblib.load("D:/DigiTGM360_NEW/Project/Real_time demand-supply balancing for power trading/Final_model/scaler")
