@@ -19,7 +19,7 @@ with open("xgboost_final_model_new.pkl", 'rb') as f:
 with open("rf_final_model_new.pkl", 'rb') as f:
     rf_model = pickle.load(f)
 
-scaler = joblib.load("D:/DigiTGM360_NEW/Project/Real_time demand-supply balancing for power trading/Final_model/scaler")
+scaler = joblib.load("scaler")
 
 def prepare_future_dates(last_date, periods=30):
     future_dates = [last_date + timedelta(days=i) for i in range(1, periods + 1)]
