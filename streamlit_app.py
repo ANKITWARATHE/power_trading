@@ -9,17 +9,17 @@ import pickle
 import os
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
-import pymysql  
+import pymysql  # Ensure this is installed: pip install pymysql
 
 # Define model paths using os.path.join for compatibility
 
-with open("xgboost_final_model_new.pkl", 'rb') as f:
+with open("D:/DigiTGM360_NEW/Project/Real_time demand-supply balancing for power trading/Final_model/xgboost_final_model_new.pkl", 'rb') as f:
     xgboost_model = pickle.load(f)
 
-with open("rf_final_model_new.pkl", 'rb') as f:
+with open("D:/DigiTGM360_NEW/Project/Real_time demand-supply balancing for power trading/Final_model/rf_final_model_new.pkl", 'rb') as f:
     rf_model = pickle.load(f)
 
-scaler = joblib.load("scaler")
+scaler = joblib.load("D:/DigiTGM360_NEW/Project/Real_time demand-supply balancing for power trading/Final_model/scaler")
 
 def prepare_future_dates(last_date, periods=30):
     future_dates = [last_date + timedelta(days=i) for i in range(1, periods + 1)]
@@ -47,7 +47,7 @@ def scale_future_features(future_df, scaler, scale_features):
     final_df = pd.concat([scaled_df, future_df[['Date', 'Day', 'Month', 'Year', 'Day_of_Week', 'Quarter']].reset_index(drop=True)], axis=1)
     return final_df.set_index('Date')
 
-def forecast_next_30_days(xgb_model, rf_model, scaler, last_date, last_values, scale_features):
+def forecast_next_30_days_combine(xgb_model, rf_model, scaler, last_date, last_values, scale_features):
     future_df = prepare_future_dates(last_date)
     future_df = create_future_features(future_df, last_values)
 
@@ -70,6 +70,52 @@ def forecast_next_30_days(xgb_model, rf_model, scaler, last_date, last_values, s
     future_df['Weighted_MCP_Prediction'] = predictions
     return future_df[['Date', 'Weighted_MCP_Prediction']]
 
+def forecast_next_30_days_xgb(xgb_model,scaler, last_date, last_values, scale_features):
+    future_df = prepare_future_dates(last_date)
+    future_df = create_future_features(future_df, last_values)
+
+    predictions = []
+    for i in range(30):
+        current_row = future_df.iloc[i:i+1].copy()
+        scaled_features = scale_future_features(current_row, scaler, scale_features)
+        model_features = scaled_features[['lag_1', 'lag_2', 'lag_3', 'lag_4', 'lag_5', 'lag_6', 'lag_7',
+                                          'Day', 'Month', 'Year', 'Day_of_Week', 'Quarter']]
+        xgb_pred = xgb_model.predict(model_features)[0]
+        pred = xgb_pred
+        predictions.append(pred)
+
+        if i < 29:
+            for lag in range(7, 1, -1):
+                future_df.loc[i+1, f'lag_{lag}'] = future_df.loc[i, f'lag_{lag-1}']
+            future_df.loc[i+1, 'lag_1'] = pred
+
+    future_df['Weighted_MCP_Prediction'] = predictions
+    return future_df[['Date', 'Weighted_MCP_Prediction']]
+
+def forecast_next_30_days_rf(rf_model, scaler, last_date, last_values, scale_features):
+    future_df = prepare_future_dates(last_date)
+    future_df = create_future_features(future_df, last_values)
+
+    predictions = []
+    for i in range(30):
+        current_row = future_df.iloc[i:i+1].copy()
+        scaled_features = scale_future_features(current_row, scaler, scale_features)
+        model_features = scaled_features[['lag_1', 'lag_2', 'lag_3', 'lag_4', 'lag_5', 'lag_6', 'lag_7',
+                                          'Day', 'Month', 'Year', 'Day_of_Week', 'Quarter']]
+        
+        rf_pred = rf_model.predict(model_features)[0]
+        pred = rf_pred
+        predictions.append(pred)
+
+        if i < 29:
+            for lag in range(7, 1, -1):
+                future_df.loc[i+1, f'lag_{lag}'] = future_df.loc[i, f'lag_{lag-1}']
+            future_df.loc[i+1, 'lag_1'] = pred
+
+    future_df['Weighted_MCP_Prediction'] = predictions
+    return future_df[['Date', 'Weighted_MCP_Prediction']]
+
+
 def show_forecast_results(forecast_df):
     st.subheader("30-Day Electricity Price Forecast")
     std_dev = 1672.62
@@ -77,12 +123,9 @@ def show_forecast_results(forecast_df):
     forecast_df['Upper_Limit'] = forecast_df['Weighted_MCP_Prediction'] + 1.645 * std_dev
     forecast_df['Date'] = forecast_df['Date'].dt.strftime('%d-%m-%Y') 
 
-    cm = sns.light_palette("#121622", as_cmap = True)
-
-    
+    cm = sns.light_palette("#121622", as_cmap = True)    
 
     styled_table = forecast_df.style.background_gradient(cmap = cm).set_properties(**{'text-align': 'left'})
-
 
     st.markdown("""
         <style>
@@ -155,6 +198,9 @@ def show_forecast_results(forecast_df):
 
 
 def main():
+    # Set Page Configuration
+    st.set_page_config(page_title="Power Trading App", layout = "wide")
+    
     st.markdown("""
     <div style="text-align: center; margin-bottom: 30px;">
         <img src="https://360digit.b-cdn.net/assets/admin/ckfinder/userfiles/images/12-01-2024/aispry.png" width="300">
@@ -167,12 +213,13 @@ def main():
 
     with st.sidebar:
         st.title("Forecast Configuration")
-        st.markdown("""<div style="padding:10px; background-color: #f0f2f6; border-radius: 5px;">
+        st.markdown("""<div style="padding:0px; background-color: #f0f2f6; border-radius: 5px;">
             <p style="color:black; text-align:center;">Enter database credentials</p></div>""",
             unsafe_allow_html=True)
         user = st.sidebar.text_input("user", "Type Here")
         pw = st.sidebar.text_input("password", "Type Here")
         db = st.sidebar.text_input("database", "Type Here")
+        model = st.sidebar.selectbox("Select a model", ["XGBoost", "Random Forest", "XGBoost & Random Forest Combine"])
         st.markdown("---")
 
     if st.button("Generate Forecast", key = "forecast_button"):
@@ -182,14 +229,20 @@ def main():
                 last_7_values = [4491.87, 4181.42, 4325.82, 4714.66, 4584.31, 3186.81, 3514.95]
                 scale_features = ['lag_1', 'lag_2', 'lag_3', 'lag_4', 'lag_5', 'lag_6', 'lag_7']
 
-                forecast_df = forecast_next_30_days(
-                    xgboost_model, rf_model, scaler,
-                    last_date, last_7_values, scale_features
-                )
+                if model == "XGBoost & Random Forest Combine":
+                    forecast_df = forecast_next_30_days_combine(
+                                    xgboost_model, rf_model, scaler,
+                                    last_date, last_7_values, scale_features)
+                elif model == "XGBoost":
+                    forecast_df = forecast_next_30_days_xgb(
+                                    xgboost_model, scaler,
+                                    last_date, last_7_values, scale_features)
+                else:
+                    forecast_df = forecast_next_30_days_rf(
+                                    rf_model, scaler,
+                                    last_date, last_7_values, scale_features)
 
-                show_forecast_results(forecast_df)
-
-                
+                show_forecast_results(forecast_df)                
 
                 try:
 
